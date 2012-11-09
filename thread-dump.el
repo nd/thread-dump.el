@@ -38,6 +38,9 @@
   (setq thread-dump-threads (reverse thread-dump-threads))
   (setq thread-dump-threads-number (length thread-dump-threads)))
 
+(defun thread-dump-parse-current-buffer ()
+  (list))
+
 
 (defun thread-dump-next-thread ()
   (interactive)
