@@ -1,61 +1,209 @@
-(defvar thread-dump-mode-hook nil)
+(require 'cl)
 
-(defconst thread-dump-mode-map
+(defconst thread-dump-overview-mode-map
   (let ((map (make-keymap)))
-    (define-key map "n" 'thread-dump-next-thread)
-    (define-key map "p" 'thread-dump-prev-thread)
-    (define-key map "j" 'thread-dump-next-thread)
-    (define-key map "k" 'thread-dump-prev-thread)
-    map)
-  "Keymap for thread-dump major mode")
+    (define-key map (kbd "n") 'thread-dump-overview-show-next-thread)
+    (define-key map (kbd "j") 'thread-dump-overview-show-next-thread)
+    (define-key map (kbd "p") 'thread-dump-overview-show-prev-thread)
+    (define-key map (kbd "k") 'thread-dump-overview-show-prev-thread)
+    (define-key map (kbd "RET") 'thread-dump-overview-show-thread)
+    (define-key map (kbd "o") 'thread-dump-overview-show-thread)
+    (define-key map (kbd "v") 'thread-dump-overview-visit-thread)
+    (define-key map (kbd "h") 'thread-dump-overview-hide)
+    (define-key map (kbd "H") 'thread-dump-overview-hide-with-same-stack)
+    (define-key map (kbd "q") 'thread-dump-overview-quit)
+    (define-key map (kbd "/") 'thread-dump-overview-filter)
+    (define-key map (kbd "N") 'thread-dump-overview-open-next-dump)
+    (define-key map (kbd "P") 'thread-dump-overview-open-prev-dump)
+    map))
 
-(defun thread-dump-mode ()
-  "Major mode for viewing java thread dumps"
-  (interactive)
-  (kill-all-local-variables)
+(defun thread-dump-overview-mode ()
+  (buffer-disable-undo)
   (setq buffer-read-only t)
+  (delete-other-windows)
+  (toggle-truncate-lines 1)
+  (setq major-mode 'thread-dump-overview-mode
+        mode-name "Thread-Dump-Overview")
+  (use-local-map thread-dump-overview-mode-map)
+  (run-hooks 'thread-dump-overview-mode-hook))
 
+
+(defun thread-dump-open-dir (dir)
+  (interactive "DThread dump directory: ")
+  (let ((files (directory-files dir t directory-files-no-dot-files-regexp)))
+    (thread-dump-open-file (car files))
+    
+    (make-variable-buffer-local 'thread-dump-files)
+    (setq thread-dump-files files)
+
+    (make-variable-buffer-local 'thread-dump-file-index)
+    (setq thread-dump-file-index 0)))
+
+
+(defun thread-dump-open-file (file)
+  (interactive "FThread dump: ")
+  (let ((threads (with-temp-buffer
+                   (insert-file-contents file)
+                   (thread-dump-parse-current-buffer))))
+    (thread-dump-enter threads)
+    (make-variable-buffer-local 'thread-dump-file)
+    (setq thread-dump-file file)
+    (setq header-line-format (list file))))
+
+
+(defun thread-dump-enter (threads)
+  (thread-dump-show-overview threads)
   (make-variable-buffer-local 'thread-dump-threads)
-  (make-variable-buffer-local 'thread-dump-threads-number)
-  (make-variable-buffer-local 'thread-dump-current-thread)
-  (setq thread-dump-current-thread 0)
-
-  (thread-dump-parse-buffer)
-  (setq major-mode 'thread-dump-mode
-        mode-name "Thread-Dump")
-  (use-local-map thread-dump-mode-map)
-  (run-hooks 'thread-dump-mode-hook))
+  (setq thread-dump-threads threads)
+  (make-variable-buffer-local 'thread-dump-filter)
+  (thread-dump-overview-mode))
 
 
-(defun thread-dump-parse-buffer () 
-  (setq thread-dump-threads '())
+(defun thread-dump-show-overview (threads)
+  (let* ((buf (get-buffer-create "*thread-dump-overview*")))
+    (set-buffer buf)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (dolist (thread threads nil)
+        (thread-dump-show-thread-header thread))
+      (backward-delete-char 1))
+    (goto-char (point-min))
+    (switch-to-buffer buf)))
+
+(defun thread-dump-overview-quit ()
+  (interactive)
+  (delete-other-windows)
+  (bury-buffer))
+
+(defun thread-dump-show-thread-header (thread)
+  (insert (propertize (concat (thread-dump-get-thread-name thread) "\n")
+                      'id (thread-dump-get-thread-id thread))))
+
+(defun thread-dump-overview-next-thread ()
+  (interactive)
+  (unless (eq (point-max) (line-end-position))
+    (next-line)))
+
+(defun thread-dump-overview-prev-thread ()
+  (interactive)
+  (next-line -1))
+
+(defun thread-dump-overview-show-next-thread ()
+  (interactive)
+  (thread-dump-overview-next-thread)
+  (thread-dump-overview-visit-thread))
+
+(defun thread-dump-overview-show-prev-thread ()
+  (interactive)
+  (thread-dump-overview-prev-thread)
+  (thread-dump-overview-visit-thread))
+
+(defun thread-dump-overview-show-thread ()
+  (interactive)
+  (thread-dump-overview-visit-thread t))
+
+(defun thread-dump-overview-visit-thread (&optional switch-to-details)
+  (interactive)
+  (let* ((id (get-text-property (point) 'id))
+         (thread (thread-dump-find-thread-by-id id))
+         (file thread-dump-file)
+         (buf (get-buffer-create "*thread-dump-details*"))
+         (inhibit-read-only t))
+    (set-buffer buf)
+    (erase-buffer)
+    (toggle-truncate-lines 1)
+    (insert (thread-dump-get-thread-contents thread))
+    (goto-char (point-min))
+    (and file (setq header-line-format (list file)))
+
+    (let* ((w (get-buffer-window buf))
+           (cur-win (selected-window)))
+      (if (and w switch-to-details)
+          (select-window w)
+        (unless w
+          (split-window-right 60)
+          (select-window (window-next-sibling))
+          (switch-to-buffer buf)
+          (unless switch-to-details
+            (select-window cur-win)))))))
+
+(defun thread-dump-overview-open-next-dump ()
+  (interactive)
+  (when (and thread-dump-files
+             thread-dump-file-index
+             (< thread-dump-file-index (- (length thread-dump-files) 1)))
+    (setq thread-dump-file-index (+ 1 thread-dump-file-index))
+    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files))
+    (and thread-dump-filter (thread-dump-overview-filter thread-dump-filter))))
+
+(defun thread-dump-overview-open-prev-dump ()
+  (interactive)
+  (when (and thread-dump-files
+             thread-dump-file-index
+             (> thread-dump-file-index 0))
+    (setq thread-dump-file-index (- thread-dump-file-index 1))
+    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files))
+    (and thread-dump-filter (thread-dump-overview-filter thread-dump-filter))))
+
+(defun thread-dump-find-thread-by-id (id)
+  (find id
+        thread-dump-threads
+        :test '(lambda (x y) (= x (cdr (assoc 'id y))))))
+
+(defun thread-dump-overview-filter (term)
+  (interactive "MFilter: ")
+  (if (equal term "")
+      (progn
+        (thread-dump-show-overview thread-dump-threads)
+        (setq thread-dump-filter nil))
+    (let ((filtered (delq nil 
+                          (mapcar (lambda (x) 
+                                    (if (thread-dump-match term x)
+                                        x
+                                      nil))
+                                  thread-dump-threads))))
+      (thread-dump-show-overview filtered)
+      (setq thread-dump-filter term))))
+
+(defun thread-dump-match (term thread)
+  (string-match term (thread-dump-get-thread-contents thread)))
+
+(defun thread-dump-parse-current-buffer ()
   (save-restriction
     (save-excursion
       (goto-char (point-min))
-      (while (re-search-forward "^\"" nil t)
-        (let* ((thread-start (line-beginning-position 1)))
-          (setq thread-dump-threads (cons thread-start thread-dump-threads))))))
-  (setq thread-dump-threads (reverse thread-dump-threads))
-  (setq thread-dump-threads-number (length thread-dump-threads)))
+      (let ((threads (list))
+            (thread-id 0))
+        (while (re-search-forward "^\"" nil t)
+          (let* ((thread-start (line-beginning-position))
+                 (name-end (or (- (search-forward "\"" (line-end-position) t) 1) (line-end-position)))
+                 (state-start (re-search-forward "java.lang.Thread.State: " (line-end-position 3) t))
+                 (state-end (and state-start (line-end-position)))
+                 (stack-start (line-beginning-position 2))
+                 (thread-end (if (re-search-forward "^\n" nil t) (line-beginning-position 1) (point-max))))
+            (setq threads
+                  (cons
+                   (list
+                    (cons 'id thread-id)
+                    (cons 'name (buffer-substring-no-properties (+ thread-start 1) name-end))
+                    (cons 'start thread-start)
+                    (cons 'end thread-end)
+                    (cons 'contents (buffer-substring-no-properties thread-start thread-end))
+                    (cons 'state (and state-start (buffer-substring-no-properties state-start state-end)))
+                    (cons 'stack (and stack-start (buffer-substring-no-properties stack-start thread-end))))
+                   threads))
+            (setq thread-id (+ thread-id 1))))
+        (sort threads '(lambda (t1 t2)
+                         (string< (downcase (thread-dump-get-thread-name t1))
+                                  (downcase (thread-dump-get-thread-name t2)))))))))
 
-(defun thread-dump-parse-current-buffer ()
-  (list))
+(defun thread-dump-get-thread-name (thread)
+  (cdr (assoc 'name thread)))
 
+(defun thread-dump-get-thread-id (thread)
+  (cdr (assoc 'id thread)))
 
-(defun thread-dump-next-thread ()
-  (interactive)
-  (if (< thread-dump-current-thread (- thread-dump-threads-number 1))
-      (progn
-        (incf thread-dump-current-thread)
-        (let ((pos (nth thread-dump-current-thread thread-dump-threads)))
-          (goto-char pos)))))
-
-(defun thread-dump-prev-thread ()
-  (interactive)
-  (if (> thread-dump-current-thread 0)
-      (progn 
-        (incf thread-dump-current-thread -1)
-        (let ((pos (nth thread-dump-current-thread thread-dump-threads)))
-          (goto-char pos)))))
+(defun thread-dump-get-thread-contents (thread)
+  (cdr (assoc 'contents thread)))
 
 (provide 'thread-dump)
