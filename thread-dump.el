@@ -32,7 +32,7 @@
   (interactive "DThread dump directory: ")
   (let ((files (directory-files dir t directory-files-no-dot-files-regexp)))
     (thread-dump-open-file (car files))
-    
+
     (make-variable-buffer-local 'thread-dump-files)
     (setq thread-dump-files files)
 
@@ -156,8 +156,8 @@
       (progn
         (thread-dump-show-overview thread-dump-threads)
         (setq thread-dump-filter nil))
-    (let ((filtered (delq nil 
-                          (mapcar (lambda (x) 
+    (let ((filtered (delq nil
+                          (mapcar (lambda (x)
                                     (if (thread-dump-match term x)
                                         x
                                       nil))
