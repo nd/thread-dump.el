@@ -175,27 +175,33 @@
       (let ((threads (list))
             (thread-id 0))
         (while (re-search-forward "^\"" nil t)
-          (let* ((thread-start (line-beginning-position))
-                 (name-end (or (- (search-forward "\"" (line-end-position) t) 1) (line-end-position)))
-                 (state-start (re-search-forward "java.lang.Thread.State: " (line-end-position 3) t))
-                 (state-end (and state-start (line-end-position)))
-                 (stack-start (line-beginning-position 2))
-                 (thread-end (if (re-search-forward "^\n" nil t) (line-beginning-position 1) (point-max))))
-            (setq threads
-                  (cons
-                   (list
-                    (cons 'id thread-id)
-                    (cons 'name (buffer-substring-no-properties (+ thread-start 1) name-end))
-                    (cons 'start thread-start)
-                    (cons 'end thread-end)
-                    (cons 'contents (buffer-substring-no-properties thread-start thread-end))
-                    (cons 'state (and state-start (buffer-substring-no-properties state-start state-end)))
-                    (cons 'stack (and stack-start (buffer-substring-no-properties stack-start thread-end))))
-                   threads))
-            (setq thread-id (+ thread-id 1))))
+          (move-beginning-of-line 1)
+          (setq threads
+                (cons (thread-dump-parse-thread-at-point thread-id) threads))
+          (setq thread-id (+ thread-id 1)))
+
         (sort threads '(lambda (t1 t2)
                          (string< (downcase (thread-dump-get-thread-name t1))
                                   (downcase (thread-dump-get-thread-name t2)))))))))
+
+(defun thread-dump-parse-thread-at-point (thread-id)
+  (let* ((thread-start (point))
+         (name-start (or (search-forward "\"" (line-end-position) t) thread-start))
+         (name-end (or (- (search-forward "\"" (line-end-position) t) 1) (line-end-position)))
+         (state (thread-dump-parse-thread-state-at-point))
+         (thread-end (if (re-search-forward "^\n" nil t) (line-beginning-position 1) (point-max))))
+    (list
+     (cons 'id thread-id)
+     (cons 'name (buffer-substring-no-properties name-start name-end))
+     (cons 'start thread-start)
+     (cons 'end thread-end)
+     (cons 'contents (buffer-substring-no-properties thread-start thread-end))
+     (cons 'state state))))
+
+(defun thread-dump-parse-thread-state-at-point ()
+  (if (re-search-forward "java.lang.Thread.State: \\b\\([a-zA-Z_]+\\)\\b" (line-end-position 3) t)
+      (buffer-substring-no-properties (match-beginning 1) (match-end 1))
+    nil))
 
 (defun thread-dump-get-thread-name (thread)
   (cdr (assoc 'name thread)))
@@ -205,5 +211,8 @@
 
 (defun thread-dump-get-thread-contents (thread)
   (cdr (assoc 'contents thread)))
+
+(defun thread-dump-get-thread-state (thread)
+  (cdr (assoc 'state thread)))
 
 (provide 'thread-dump)
