@@ -16,7 +16,16 @@
   (with-thread "test-data/t1"
     (let ((thread (thread-dump-parse-thread-at-point 1)))
       (should (string= (thread-dump-get-thread-name thread) "ApplicationImpl pooled thread 311"))
-      (should (string= (thread-dump-get-thread-state thread) "TIMED_WAITING")))))
+      (should (string= (thread-dump-get-thread-state thread) "TIMED_WAITING"))
+      (let* ((stack-str (thread-dump-get-thread-stack thread))
+             (stack (split-string stack-str "\r?\n")))
+        (should (string-match
+                 "\\( \\|\t\\)*at com.intellij.openapi.application.impl.ApplicationImpl$1$1.run(ApplicationImpl.java:154)"
+                 (car (last stack))))
+        (should (string-match
+                 "\\( \\|\t\\)*at sun.misc.Unsafe.park(Native Method)"
+                 (car stack)))
+        (should (= 11 (length stack)))))))
 
 (defmacro with-thread-dump (file &rest body)
   (declare (indent 1))

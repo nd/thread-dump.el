@@ -189,18 +189,25 @@
          (name-start (or (search-forward "\"" (line-end-position) t) thread-start))
          (name-end (or (- (search-forward "\"" (line-end-position) t) 1) (line-end-position)))
          (state (thread-dump-parse-thread-state-at-point))
+         (stack-start (thread-dump-get-stack-start-at-point))
          (thread-end (if (re-search-forward "^\n" nil t) (line-beginning-position 1) (point-max))))
     (list
-     (cons 'id thread-id)
-     (cons 'name (buffer-substring-no-properties name-start name-end))
-     (cons 'start thread-start)
-     (cons 'end thread-end)
-     (cons 'contents (buffer-substring-no-properties thread-start thread-end))
-     (cons 'state state))))
+       (cons 'id thread-id)
+       (cons 'name (buffer-substring-no-properties name-start name-end))
+       (cons 'start thread-start)
+       (cons 'end thread-end)
+       (cons 'contents (buffer-substring-no-properties thread-start thread-end))
+       (cons 'state state)
+       (cons 'stack (if stack-start (buffer-substring-no-properties stack-start thread-end) nil)))))
 
 (defun thread-dump-parse-thread-state-at-point ()
   (if (re-search-forward "java.lang.Thread.State: \\b\\([a-zA-Z_]+\\)\\b" (line-end-position 3) t)
       (buffer-substring-no-properties (match-beginning 1) (match-end 1))
+    nil))
+
+(defun thread-dump-get-stack-start-at-point ()
+  (if (re-search-forward "^\\( \\|\t\\)*at" nil t)
+      (line-beginning-position 1)
     nil))
 
 (defun thread-dump-get-thread-name (thread)
@@ -214,5 +221,8 @@
 
 (defun thread-dump-get-thread-state (thread)
   (cdr (assoc 'state thread)))
+
+(defun thread-dump-get-thread-stack (thread)
+  (cdr (assoc 'stack thread)))
 
 (provide 'thread-dump)
