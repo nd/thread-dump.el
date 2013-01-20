@@ -1,16 +1,11 @@
 (require 'ert)
 (require 'thread-dump)
 
-;(ert-deftest ert-parse-threads ()
-;  (with-thread-dump "test-data/thread-dump"
-;    (let ((threads (thread-dump-parse-current-buffer)))
-;      (should (listp threads))
-;      (should (= (length threads) 78))
-;      (let ((t1 (car threads)))
-;        (should (string= (thread-dump-get-thread-name t1) "Action Updater"))
-;        (should (string= (thread-dump-get-thread-state t1) "WAITING"))
-;        )
-;      threads)))
+(ert-deftest ert-parse-threads ()
+  (with-thread-dump "test-data/thread-dump2"
+    (let ((threads (thread-dump-parse-current-buffer)))
+      (should (listp threads))
+      (should (= (length threads) 2)))))
 
 (ert-deftest ert-parse-thread ()
   (with-thread "test-data/t1"

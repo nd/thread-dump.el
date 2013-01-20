@@ -201,12 +201,12 @@
        (cons 'stack (if stack-start (buffer-substring-no-properties stack-start thread-end) nil)))))
 
 (defun thread-dump-parse-thread-state-at-point ()
-  (if (re-search-forward "java.lang.Thread.State: \\b\\([a-zA-Z_]+\\)\\b" (line-end-position 3) t)
+  (if (re-search-forward "java.lang.Thread.State: \\b\\([a-zA-Z_]+\\)\\b" (line-end-position 2) t)
       (buffer-substring-no-properties (match-beginning 1) (match-end 1))
     nil))
 
 (defun thread-dump-get-stack-start-at-point ()
-  (if (re-search-forward "^\\( \\|\t\\)*at" nil t)
+  (if (re-search-forward "^\\( \\|\t\\)*at" (line-end-position 2) t)
       (line-beginning-position 1)
     nil))
 
