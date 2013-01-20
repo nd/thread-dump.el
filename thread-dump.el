@@ -21,7 +21,7 @@
   (buffer-disable-undo)
   (setq buffer-read-only t)
   (delete-other-windows)
-  (toggle-truncate-lines 1)
+  (set (make-local-variable 'truncate-lines) t)
   (setq major-mode 'thread-dump-overview-mode
         mode-name "Thread-Dump-Overview")
   (use-local-map thread-dump-overview-mode-map)
