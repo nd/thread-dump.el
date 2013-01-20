@@ -52,6 +52,7 @@
 
 
 (defun thread-dump-enter (threads)
+  (make-variable-buffer-local 'thread-dump-ow-cur-thread-line)
   (thread-dump-show-overview threads)
   (make-variable-buffer-local 'thread-dump-threads)
   (setq thread-dump-threads threads)
@@ -86,7 +87,8 @@
 
 (defun thread-dump-overview-prev-thread ()
   (interactive)
-  (next-line -1))
+  (unless (eq (point-min) (line-beginning-position))
+    (next-line -1)))
 
 (defun thread-dump-overview-show-next-thread ()
   (interactive)
@@ -104,6 +106,7 @@
 
 (defun thread-dump-overview-visit-thread (&optional switch-to-details)
   (interactive)
+  (thread-dump-highlight-cur-thread)
   (let* ((id (get-text-property (point) 'id))
          (thread (thread-dump-find-thread-by-id id))
          (file thread-dump-file)
@@ -126,6 +129,15 @@
           (switch-to-buffer buf)
           (unless switch-to-details
             (select-window cur-win)))))))
+
+(defun thread-dump-highlight-cur-thread ()
+  (let ((inhibit-read-only t))
+    (when thread-dump-ow-cur-thread-line
+      (save-excursion
+        (goto-line thread-dump-ow-cur-thread-line)
+        (put-text-property (point-at-bol) (point-at-eol) 'face 'default)))
+    (setq thread-dump-ow-cur-thread-line (line-number-at-pos))
+    (put-text-property (point-at-bol) (point-at-eol) 'face 'thread-dump-current-thread)))
 
 (defun thread-dump-overview-open-next-dump ()
   (interactive)
@@ -224,5 +236,11 @@
 
 (defun thread-dump-get-thread-stack (thread)
   (cdr (assoc 'stack thread)))
+
+(defface thread-dump-current-thread
+  '((t :underline t
+       :weight bold))
+  "Current thread face."
+  :group 'thread-dump-faces)
 
 (provide 'thread-dump)
