@@ -53,6 +53,7 @@
 
 (defun thread-dump-enter (threads)
   (make-variable-buffer-local 'thread-dump-ow-cur-thread-line)
+  (make-variable-buffer-local 'thread-dump-hidden-threads)
   (thread-dump-show-overview threads)
   (make-variable-buffer-local 'thread-dump-threads)
   (setq thread-dump-threads threads)
@@ -66,10 +67,30 @@
     (let ((inhibit-read-only t))
       (erase-buffer)
       (dolist (thread threads nil)
-        (thread-dump-show-thread-header thread))
+        (unless (thread-dump-hidden-thread? thread)
+          (thread-dump-show-thread-header thread)))
       (backward-delete-char 1))
     (goto-char (point-min))
     (switch-to-buffer buf)))
+
+(defun thread-dump-hidden-thread? (thread)
+  (when thread-dump-hidden-threads
+    (let ((s (thread-dump-get-thread-stack thread)))
+      (delq nil
+            (mapcar (lambda (hidden-thread) (string= (thread-dump-get-thread-stack hidden-thread) s))
+                    thread-dump-hidden-threads)))))
+
+(defun thread-dump-overview-hide-with-same-stack (&optional arg)
+  (interactive "P")
+  (if arg
+      (setq thread-dump-hidden-threads nil)
+    (setq thread-dump-hidden-threads
+          (cons (thread-dump-get-thread-at-point)
+                thread-dump-hidden-threads)))
+  (let ((line (line-number-at-pos)))
+    (thread-dump-show-overview thread-dump-threads)
+    (goto-line line)
+    (thread-dump-overview-visit-thread)))
 
 (defun thread-dump-overview-quit ()
   (interactive)
@@ -107,8 +128,7 @@
 (defun thread-dump-overview-visit-thread (&optional switch-to-details)
   (interactive)
   (thread-dump-highlight-cur-thread)
-  (let* ((id (get-text-property (point) 'id))
-         (thread (thread-dump-find-thread-by-id id))
+  (let* ((thread (thread-dump-get-thread-at-point))
          (file thread-dump-file)
          (buf (get-buffer-create "*thread-dump-details*"))
          (inhibit-read-only t))
@@ -129,6 +149,10 @@
           (switch-to-buffer buf)
           (unless switch-to-details
             (select-window cur-win)))))))
+
+(defun thread-dump-get-thread-at-point ()
+  (let ((id (get-text-property (point) 'id)))
+    (thread-dump-find-thread-by-id id)))
 
 (defun thread-dump-highlight-cur-thread ()
   (let ((inhibit-read-only t))
