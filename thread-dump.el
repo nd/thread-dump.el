@@ -114,7 +114,7 @@
          (inhibit-read-only t))
     (set-buffer buf)
     (erase-buffer)
-    (toggle-truncate-lines 1)
+    (set (make-local-variable 'truncate-lines) t)
     (insert (thread-dump-get-thread-contents thread))
     (goto-char (point-min))
     (and file (setq header-line-format (list file)))
