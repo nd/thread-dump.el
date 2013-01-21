@@ -19,9 +19,6 @@
 
 (defun thread-dump-overview-mode ()
   (buffer-disable-undo)
-  (setq buffer-read-only t)
-  (delete-other-windows)
-  (set (make-local-variable 'truncate-lines) t)
   (setq major-mode 'thread-dump-overview-mode
         mode-name "Thread-Dump-Overview")
   (use-local-map thread-dump-overview-mode-map)
@@ -32,46 +29,54 @@
   (interactive "DThread dump directory: ")
   (let ((files (directory-files dir t directory-files-no-dot-files-regexp)))
     (thread-dump-open-file (car files))
-
-    (make-variable-buffer-local 'thread-dump-files)
     (setq thread-dump-files files)
-
-    (make-variable-buffer-local 'thread-dump-file-index)
     (setq thread-dump-file-index 0)))
 
 
-(defun thread-dump-open-file (file)
+(defun thread-dump-open-file (file &optional use-old-buffer)
   (interactive "FThread dump: ")
   (let ((threads (with-temp-buffer
                    (insert-file-contents file)
                    (thread-dump-parse-current-buffer))))
-    (thread-dump-enter threads)
-    (make-variable-buffer-local 'thread-dump-file)
+    (when (not use-old-buffer)
+      (let ((old (get-buffer "*thread-dump-overview*")))
+        (when old (kill-buffer old))))
+    (thread-dump-show-overview threads)
+    (thread-dump-overview-mode)
     (setq thread-dump-file file)
     (setq header-line-format (list file))))
 
 
-(defun thread-dump-enter (threads)
-  (make-variable-buffer-local 'thread-dump-ow-cur-thread-line)
-  (make-variable-buffer-local 'thread-dump-hidden-threads)
-  (thread-dump-show-overview threads)
-  (make-variable-buffer-local 'thread-dump-threads)
-  (setq thread-dump-threads threads)
-  (make-variable-buffer-local 'thread-dump-filter)
-  (thread-dump-overview-mode))
-
-
 (defun thread-dump-show-overview (threads)
-  (let* ((buf (get-buffer-create "*thread-dump-overview*")))
+  (let* ((buf (thread-dump-get-overview-buffer)))
     (set-buffer buf)
     (let ((inhibit-read-only t))
+      (setq thread-dump-threads threads)
       (erase-buffer)
       (dolist (thread threads nil)
-        (unless (thread-dump-hidden-thread? thread)
+        (unless (or (thread-dump-hidden-thread? thread)
+                    (thread-dump-filtered-thread? thread))
           (thread-dump-show-thread-header thread)))
       (backward-delete-char 1))
     (goto-char (point-min))
-    (switch-to-buffer buf)))
+    (switch-to-buffer buf)
+    (setq buffer-read-only t)
+    (goto-line 1)
+    (thread-dump-overview-visit-thread)))
+
+(defun thread-dump-get-overview-buffer ()
+  (let ((existing (get-buffer "*thread-dump-overview*")))
+    (or existing
+        (let ((new (get-buffer-create "*thread-dump-overview*")))
+          (make-local-variable 'thread-dump-ow-cur-thread-line)
+          (make-local-variable 'thread-dump-hidden-threads)
+          (make-local-variable 'thread-dump-filter)
+          (make-local-variable 'thread-dump-threads)
+          (make-local-variable 'thread-dump-file)
+          (make-local-variable 'thread-dump-files)
+          (make-local-variable 'thread-dump-file-index)
+          (set (make-local-variable 'truncate-lines) t)
+          new))))
 
 (defun thread-dump-hidden-thread? (thread)
   (when thread-dump-hidden-threads
@@ -79,6 +84,10 @@
       (delq nil
             (mapcar (lambda (hidden-thread) (string= (thread-dump-get-thread-stack hidden-thread) s))
                     thread-dump-hidden-threads)))))
+
+(defun thread-dump-filtered-thread? (thread)
+  (when thread-dump-filter
+    (not (thread-dump-match thread-dump-filter thread))))
 
 (defun thread-dump-overview-hide-with-same-stack (&optional arg)
   (interactive "P")
@@ -89,8 +98,9 @@
                 thread-dump-hidden-threads)))
   (let ((line (line-number-at-pos)))
     (thread-dump-show-overview thread-dump-threads)
-    (goto-line line)
-    (thread-dump-overview-visit-thread)))
+;    (goto-line line)
+;    (thread-dump-overview-visit-thread)
+    ))
 
 (defun thread-dump-overview-quit ()
   (interactive)
@@ -144,11 +154,12 @@
       (if (and w switch-to-details)
           (select-window w)
         (unless w
-          (split-window-right 60)
-          (select-window (window-next-sibling))
-          (switch-to-buffer buf)
-          (unless switch-to-details
-            (select-window cur-win)))))))
+          (delete-other-windows cur-win)
+          (let ((w (split-window-right 60)))
+            (select-window w)
+            (switch-to-buffer buf)
+            (unless switch-to-details
+              (select-window cur-win))))))))
 
 (defun thread-dump-get-thread-at-point ()
   (let ((id (get-text-property (point) 'id)))
@@ -169,8 +180,7 @@
              thread-dump-file-index
              (< thread-dump-file-index (- (length thread-dump-files) 1)))
     (setq thread-dump-file-index (+ 1 thread-dump-file-index))
-    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files))
-    (and thread-dump-filter (thread-dump-overview-filter thread-dump-filter))))
+    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files) 't)))
 
 (defun thread-dump-overview-open-prev-dump ()
   (interactive)
@@ -178,8 +188,7 @@
              thread-dump-file-index
              (> thread-dump-file-index 0))
     (setq thread-dump-file-index (- thread-dump-file-index 1))
-    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files))
-    (and thread-dump-filter (thread-dump-overview-filter thread-dump-filter))))
+    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files) 't)))
 
 (defun thread-dump-find-thread-by-id (id)
   (find id
@@ -188,18 +197,8 @@
 
 (defun thread-dump-overview-filter (term)
   (interactive "MFilter: ")
-  (if (equal term "")
-      (progn
-        (thread-dump-show-overview thread-dump-threads)
-        (setq thread-dump-filter nil))
-    (let ((filtered (delq nil
-                          (mapcar (lambda (x)
-                                    (if (thread-dump-match term x)
-                                        x
-                                      nil))
-                                  thread-dump-threads))))
-      (thread-dump-show-overview filtered)
-      (setq thread-dump-filter term))))
+  (setq thread-dump-filter (if (equal term "") nil term))
+  (thread-dump-show-overview thread-dump-threads))
 
 (defun thread-dump-match (term thread)
   (string-match term (thread-dump-get-thread-contents thread)))
