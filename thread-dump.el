@@ -68,15 +68,17 @@
   (let ((existing (get-buffer "*thread-dump-overview*")))
     (or existing
         (let ((new (get-buffer-create "*thread-dump-overview*")))
-          (make-local-variable 'thread-dump-ow-cur-thread-line)
-          (make-local-variable 'thread-dump-hidden-threads)
-          (make-local-variable 'thread-dump-filter)
-          (make-local-variable 'thread-dump-threads)
-          (make-local-variable 'thread-dump-file)
-          (make-local-variable 'thread-dump-files)
-          (make-local-variable 'thread-dump-file-index)
-          (set (make-local-variable 'truncate-lines) t)
-          new))))
+          (with-current-buffer new
+            (set (make-local-variable 'thread-dump-ow-cur-thread-line) nil)
+            (set (make-local-variable 'thread-dump-hidden-threads) nil)
+            (set (make-local-variable 'thread-dump-filter) nil)
+            (set (make-local-variable 'thread-dump-threads) nil)
+            (set (make-local-variable 'thread-dump-file) nil)
+            (set (make-local-variable 'thread-dump-files) nil)
+            (set (make-local-variable 'thread-dump-file-index) nil)
+            (set (make-local-variable 'truncate-lines) t)
+            new)
+          ))))
 
 (defun thread-dump-hidden-thread? (thread)
   (when thread-dump-hidden-threads
