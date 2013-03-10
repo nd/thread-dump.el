@@ -28,23 +28,18 @@
 (defun thread-dump-open-dir (dir)
   (interactive "DThread dump directory: ")
   (let ((files (directory-files dir t directory-files-no-dot-files-regexp)))
-    (thread-dump-do-open-file files 0)))
+    (thread-dump-open-files files)))
 
 
-(defun thread-dump-open-marked-files ()
+(defun thread-dump-open-file (file)
+  (interactive "FThread dump: ")
+  (thread-dump-open-files (list file)))
+
+
+(defun thread-dump-open-files (files &optional file-index use-old-buffer)
   (interactive)
-  (let ((files (dired-get-marked-files)))
-    (thread-dump-do-open-file files 0)))
-
-
-(defun thread-dump-open-file (file &optional use-old-buffer)
-  (interactive "FThread dump: ")
-  (thread-dump-do-open-file (list files) 0))
-
-
-(defun thread-dump-do-open-file (files file-index &optional use-old-buffer)
-  (interactive "FThread dump: ")
-  (let* ((file (nth file-index files))
+  (let* ((findex (or file-index 0))
+         (file (nth findex files))
          (threads (with-temp-buffer
                     (insert-file-contents file)
                     (thread-dump-parse-current-buffer))))
@@ -54,7 +49,7 @@
     (with-current-buffer (thread-dump-get-overview-buffer)
       (setq thread-dump-file file)
       (setq thread-dump-files files)
-      (setq thread-dump-file-index file-index)
+      (setq thread-dump-file-index findex)
       (setq header-line-format (list file)))
     (thread-dump-show-overview threads)
     (thread-dump-overview-mode)))
@@ -195,7 +190,7 @@
   (when (and thread-dump-files
              thread-dump-file-index
              (< thread-dump-file-index (- (length thread-dump-files) 1)))
-    (thread-dump-do-open-file thread-dump-files (+ 1 thread-dump-file-index) 't))))
+    (thread-dump-open-files thread-dump-files (+ 1 thread-dump-file-index) 't))))
 
 (defun thread-dump-overview-open-prev-dump ()
   (interactive)
@@ -203,7 +198,7 @@
     (when (and thread-dump-files
              thread-dump-file-index
              (> thread-dump-file-index 0))
-    (thread-dump-do-open-file thread-dump-files (- thread-dump-file-index 1) 't))))
+    (thread-dump-open-files thread-dump-files (- thread-dump-file-index 1) 't))))
 
 
 (defun thread-dump-find-thread-by-id (id)
@@ -281,5 +276,7 @@
        :weight bold))
   "Current thread face."
   :group 'thread-dump-faces)
+
+
 
 (provide 'thread-dump)
