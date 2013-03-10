@@ -90,27 +90,43 @@
 
 (defun thread-dump-hidden-thread? (thread)
   (when thread-dump-hidden-threads
-    (let ((s (thread-dump-get-thread-stack thread)))
+    (let ((s (thread-dump-get-thread-stack thread))
+          (name (thread-dump-get-thread-name thread)))
       (delq nil
-            (mapcar (lambda (hidden-thread) (string= (thread-dump-get-thread-stack hidden-thread) s))
+            (mapcar (lambda (hidden-thread)
+                      (if (eq (thread-dump-get-hidden-thread-selection hidden-thread) 'same)
+                          (and (string= (thread-dump-get-hidden-thread-stack hidden-thread) s)
+                               (string= (thread-dump-get-hidden-thread-name hidden-thread) name))
+                        (string= (thread-dump-get-hidden-thread-stack hidden-thread) s)))
                     thread-dump-hidden-threads)))))
 
 (defun thread-dump-filtered-thread? (thread)
   (when thread-dump-filter
     (not (thread-dump-match thread-dump-filter thread))))
 
+(defun thread-dump-overview-hide ()
+  (interactive)
+  (setq thread-dump-hidden-threads
+          (cons
+           (list
+            (cons 'thread (thread-dump-get-thread-at-point))
+            (cons 'selection 'same))
+           thread-dump-hidden-threads))
+  (let ((line (line-number-at-pos)))
+    (thread-dump-show-overview thread-dump-threads)))
+
 (defun thread-dump-overview-hide-with-same-stack (&optional arg)
   (interactive "P")
   (if arg
       (setq thread-dump-hidden-threads nil)
     (setq thread-dump-hidden-threads
-          (cons (thread-dump-get-thread-at-point)
-                thread-dump-hidden-threads)))
+          (cons
+           (list
+            (cons 'thread (thread-dump-get-thread-at-point))
+            (cons 'selection 'with-same-stack))
+           thread-dump-hidden-threads)))
   (let ((line (line-number-at-pos)))
-    (thread-dump-show-overview thread-dump-threads)
-;    (goto-line line)
-;    (thread-dump-overview-visit-thread)
-    ))
+    (thread-dump-show-overview thread-dump-threads)))
 
 (defun thread-dump-overview-quit ()
   (interactive)
@@ -270,6 +286,15 @@
 
 (defun thread-dump-get-thread-stack (thread)
   (cdr (assoc 'stack thread)))
+
+(defun thread-dump-get-hidden-thread-stack (thread)
+  (thread-dump-get-thread-stack (cdr (assoc 'thread thread))))
+
+(defun thread-dump-get-hidden-thread-selection (thread)
+  (cdr (assoc 'selection thread)))
+
+(defun thread-dump-get-hidden-thread-name (thread)
+  (thread-dump-get-thread-name (cdr (assoc 'thread thread))))
 
 (defface thread-dump-current-thread
   '((t :underline t
