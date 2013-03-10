@@ -31,6 +31,12 @@
     (thread-dump-do-open-file files 0)))
 
 
+(defun thread-dump-open-marked-files ()
+  (interactive)
+  (let ((files (dired-get-marked-files)))
+    (thread-dump-do-open-file files 0)))
+
+
 (defun thread-dump-open-file (file &optional use-old-buffer)
   (interactive "FThread dump: ")
   (thread-dump-do-open-file (list files) 0))
