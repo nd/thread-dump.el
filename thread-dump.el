@@ -28,23 +28,30 @@
 (defun thread-dump-open-dir (dir)
   (interactive "DThread dump directory: ")
   (let ((files (directory-files dir t directory-files-no-dot-files-regexp)))
-    (thread-dump-open-file (car files))
-    (setq thread-dump-files files)
-    (setq thread-dump-file-index 0)))
+    (thread-dump-do-open-file files 0)))
 
 
 (defun thread-dump-open-file (file &optional use-old-buffer)
   (interactive "FThread dump: ")
-  (let ((threads (with-temp-buffer
-                   (insert-file-contents file)
-                   (thread-dump-parse-current-buffer))))
+  (thread-dump-do-open-file (list files) 0))
+
+
+(defun thread-dump-do-open-file (files file-index &optional use-old-buffer)
+  (interactive "FThread dump: ")
+  (let* ((file (nth file-index files))
+         (threads (with-temp-buffer
+                    (insert-file-contents file)
+                    (thread-dump-parse-current-buffer))))
     (when (not use-old-buffer)
       (let ((old (get-buffer "*thread-dump-overview*")))
         (when old (kill-buffer old))))
+    (with-current-buffer (thread-dump-get-overview-buffer)
+      (setq thread-dump-file file)
+      (setq thread-dump-files files)
+      (setq thread-dump-file-index file-index)
+      (setq header-line-format (list file)))
     (thread-dump-show-overview threads)
-    (thread-dump-overview-mode)
-    (setq thread-dump-file file)
-    (setq header-line-format (list file))))
+    (thread-dump-overview-mode)))
 
 
 (defun thread-dump-show-overview (threads)
@@ -69,14 +76,14 @@
     (or existing
         (let ((new (get-buffer-create "*thread-dump-overview*")))
           (with-current-buffer new
-            (set (make-local-variable 'thread-dump-ow-cur-thread-line) nil)
-            (set (make-local-variable 'thread-dump-hidden-threads) nil)
-            (set (make-local-variable 'thread-dump-filter) nil)
-            (set (make-local-variable 'thread-dump-threads) nil)
-            (set (make-local-variable 'thread-dump-file) nil)
-            (set (make-local-variable 'thread-dump-files) nil)
-            (set (make-local-variable 'thread-dump-file-index) nil)
-            (set (make-local-variable 'truncate-lines) t)
+            (setq-local thread-dump-ow-cur-thread-line nil)
+            (setq-local thread-dump-hidden-threads nil)
+            (setq-local thread-dump-filter nil)
+            (setq-local thread-dump-threads nil)
+            (setq-local thread-dump-file nil)
+            (setq-local thread-dump-files nil)
+            (setq-local thread-dump-file-index nil)
+            (setq-local truncate-lines t)
             new)
           ))))
 
@@ -178,19 +185,20 @@
 
 (defun thread-dump-overview-open-next-dump ()
   (interactive)
+  (with-current-buffer (thread-dump-get-overview-buffer)
   (when (and thread-dump-files
              thread-dump-file-index
              (< thread-dump-file-index (- (length thread-dump-files) 1)))
-    (setq thread-dump-file-index (+ 1 thread-dump-file-index))
-    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files) 't)))
+    (thread-dump-do-open-file thread-dump-files (+ 1 thread-dump-file-index) 't))))
 
 (defun thread-dump-overview-open-prev-dump ()
   (interactive)
-  (when (and thread-dump-files
+  (with-current-buffer (thread-dump-get-overview-buffer)
+    (when (and thread-dump-files
              thread-dump-file-index
              (> thread-dump-file-index 0))
-    (setq thread-dump-file-index (- thread-dump-file-index 1))
-    (thread-dump-open-file (nth thread-dump-file-index thread-dump-files) 't)))
+    (thread-dump-do-open-file thread-dump-files (- thread-dump-file-index 1) 't))))
+
 
 (defun thread-dump-find-thread-by-id (id)
   (find id
