@@ -176,12 +176,16 @@
   (let* ((thread (thread-dump-get-thread-at-point))
          (file thread-dump-file)
          (buf (get-buffer-create "*thread-dump-details*"))
+         (filter thread-dump-filter)
          (inhibit-read-only t))
     (set-buffer buf)
     (erase-buffer)
     (set (make-local-variable 'truncate-lines) t)
     (insert (thread-dump-get-thread-contents thread))
     (goto-char (point-min))
+    (when filter
+      (while (search-forward filter nil 't)
+        (put-text-property (match-beginning 0) (match-end 0) 'face 'highlight)))
     (and file (setq header-line-format (list file)))
 
     (let* ((w (get-buffer-window buf))
