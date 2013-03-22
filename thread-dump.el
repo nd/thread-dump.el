@@ -1,4 +1,10 @@
-(require 'cl)
+;;; thread-dump.el --- java thread dump viewer
+;;
+;; Author: Dmitry Neverov
+;; URL: http://github.com/nd/thread-dump.el
+;; Version: 1.0
+;;
+;; Code goes here
 
 (defconst thread-dump-overview-mode-map
   (let ((map (make-keymap)))
@@ -318,3 +324,5 @@
 
 
 (provide 'thread-dump)
+
+;;; thread-dump.el ends here
