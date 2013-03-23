@@ -1,4 +1,4 @@
-;;; thread-dump.el --- java thread dump viewer
+;;; thread-dump.el --- Java thread dump viewer
 ;;
 ;; Author: Dmitry Neverov
 ;; URL: http://github.com/nd/thread-dump.el
