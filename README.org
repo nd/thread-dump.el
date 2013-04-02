@@ -15,9 +15,9 @@
    : (when (not (package-installed-p 'thread-dump))
    :   (package-install 'thread-dump))
 
-   There are 2 entry points to the viewer: thread-dump-open-dir
+   There are 2 entry points to the viewer: =thread-dump-open-dir=
    creates a viewer for directory with thread dumps,
-   thread-dump-open-files creates a viewer for given files.
+   =thread-dump-open-file= creates a viewer for given file.
 
    If you use dired the following code might be useful:
 
