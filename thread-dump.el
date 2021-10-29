@@ -16,8 +16,11 @@
 ;; Author: Dmitry Neverov
 ;; URL: http://github.com/nd/thread-dump.el
 ;; Version: 1.0
+;; Package-Requires: ((emacs "24.5"))
 ;;
 ;; Code goes here
+
+(require 'cl-lib)
 
 (defconst thread-dump-overview-mode-map
   (let ((map (make-keymap)))
@@ -250,9 +253,9 @@
 
 
 (defun thread-dump-find-thread-by-id (id)
-  (find id
-        thread-dump-threads
-        :test '(lambda (x y) (= x (cdr (assoc 'id y))))))
+  (cl-find id
+           thread-dump-threads
+           :test '(lambda (x y) (= x (cdr (assoc 'id y))))))
 
 (defun thread-dump-overview-filter (term)
   (interactive "MFilter: ")
